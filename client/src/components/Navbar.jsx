@@ -1,5 +1,3 @@
-
-// Navbar.jsx
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -11,15 +9,15 @@ const Navbar = ({ room }) => {
   };
 
   return (
-    <div className="flex items-center justify-between p-4 bg-green-600 text-white">
-      <div className="text-xl font-semibold">Room: {room}</div>
+    <header className="flex items-center justify-between px-6 py-4 bg-green-600 text-white shadow-md">
+      <h1 className="text-lg md:text-xl font-bold">Room: {room}</h1>
       <button
         onClick={leaveRoom}
-        className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+        className="px-4 py-2 text-sm font-medium bg-red-500 rounded-lg hover:bg-red-600 transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-red-400"
       >
         Leave Room
       </button>
-    </div>
+    </header>
   );
 };
 

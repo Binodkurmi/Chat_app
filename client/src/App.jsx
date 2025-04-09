@@ -1,57 +1,59 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
 import { io } from 'socket.io-client';
-import Join from './components/Join';
 import Chat from './components/Chat';
-import './App.css'
+import Join from './components/Join';
+import './App.css';
+
+// Create socket connection
+const socket = io('http://localhost:5000', {
+  withCredentials: true,
+  autoConnect: false
+});
 
 function App() {
-  const [socket, setSocket] = useState(null);
-  const [name, setName] = useState('');
-  const [room, setRoom] = useState('general');
-  const [users, setUsers] = useState([]);
+  const [username, setUsername] = useState('');
+  const [room, setRoom] = useState('');
+  const [joined, setJoined] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    const newSocket = io('http://localhost:5000', {
-      withCredentials: true,
-      autoConnect: false
+  const handleJoin = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!username.trim() || !room.trim()) {
+      setError('Username and room are required');
+      return;
+    }
+
+    // Connect socket if not already connected
+    if (!socket.connected) {
+      socket.connect();
+    }
+
+    socket.emit('join', { username: username.trim(), room: room.trim() }, (response) => {
+      if (response.success) {
+        setJoined(true);
+      } else {
+        setError(response.message);
+      }
     });
-    setSocket(newSocket);
-
-    return () => {
-      if (newSocket) newSocket.disconnect();
-    };
-  }, []);
+  };
 
   return (
-    <Router>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <Join
-              name={name}
-              setName={setName}
-              room={room}
-              setRoom={setRoom}
-              socket={socket}
-            />
-          }
+    <div className="app">
+      {!joined ? (
+        <Join
+          username={username}
+          setUsername={setUsername}
+          room={room}
+          setRoom={setRoom}
+          handleJoin={handleJoin}
+          error={error}
         />
-        <Route
-          path="/chat"
-          element={
-            <Chat
-              name={name}
-              room={room}
-              socket={socket}
-              users={users}
-              setUsers={setUsers}
-            />
-          }
-        />
-      </Routes>
-    </Router>
+      ) : (
+        <Chat socket={socket} username={username} room={room} />
+      )}
+    </div>
   );
 }
 

@@ -1,94 +1,133 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Messages from './Messages';
+import { useState, useEffect, useRef } from 'react';
+import { FiSend } from 'react-icons/fi';
+import Message from './Message';
 import Users from './Users';
-import Navbar from './Navbar';
 
-const Chat = ({ name, room, socket, users, setUsers }) => {
+const Chat = ({ socket, username, room }) => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const [users, setUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
-    if (!socket) return;
+    const messageHandler = (data) => {
+      setMessages((prev) => [...prev, data]);
+    };
 
-    const messageHandler = (msg) => setMessages(msgs => [...msgs, msg]);
-    const roomDataHandler = ({ users }) => setUsers(users);
-    const typingHandler = ({ user, isTyping }) => {
-      setTypingUsers(current => 
-        isTyping 
-          ? [...current.filter(u => u !== user), user] 
-          : current.filter(u => u !== user)
-      );
+    const roomDataHandler = ({ users }) => {
+      setUsers(users);
+    };
+
+    const userJoinedHandler = (data) => {
+      setMessages((prev) => [...prev, {
+        username: 'System',
+        text: `${data.username} joined the room`,
+        timestamp: new Date().toISOString(),
+        isSystem: true
+      }]);
+    };
+
+    const userLeftHandler = (data) => {
+      setMessages((prev) => [...prev, {
+        username: 'System',
+        text: `${data.username} left the room`,
+        timestamp: new Date().toISOString(),
+        isSystem: true
+      }]);
+    };
+
+    const typingHandler = (data) => {
+      if (data.isTyping) {
+        setTypingUsers((prev) => [...new Set([...prev, data.username])]);
+      } else {
+        setTypingUsers((prev) => prev.filter(user => user !== data.username));
+      }
     };
 
     socket.on('message', messageHandler);
     socket.on('roomData', roomDataHandler);
+    socket.on('userJoined', userJoinedHandler);
+    socket.on('userLeft', userLeftHandler);
     socket.on('typing', typingHandler);
 
     return () => {
       socket.off('message', messageHandler);
       socket.off('roomData', roomDataHandler);
+      socket.off('userJoined', userJoinedHandler);
+      socket.off('userLeft', userLeftHandler);
       socket.off('typing', typingHandler);
     };
-  }, [socket, setUsers]);
+  }, [socket]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
   }, [messages]);
 
-  const sendMessage = (e) => {
-    e.preventDefault();
-    if (!message.trim() || !socket) return;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-    socket.emit('sendMessage', message, (error) => {
-      if (error) {
-        alert(typeof error === 'object' ? error.message || 'Error sending message' : error);
-        return;
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    setError('');
+    
+    socket.emit('sendMessage', { message, room }, (response) => {
+      if (response.success) {
+        setMessage('');
+        socket.emit('typing', { isTyping: false, room });
+      } else {
+        setError(response.message);
       }
-      setMessage('');
     });
   };
 
-  const handleTyping = (e) => {
-    setMessage(e.target.value);
-    if (socket) {
-      socket.emit('typing', e.target.value.length > 0);
-    }
+  const handleTyping = () => {
+    socket.emit('typing', { isTyping: !!message, room });
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      <Navbar room={room} />
-      <div className="flex flex-1 overflow-hidden">
-        <Users users={users} />
-        <div className="flex flex-col flex-1">
-          <Messages messages={messages} name={name} messagesEndRef={messagesEndRef} />
-          {typingUsers.length > 0 && (
-            <div className="px-4 py-2 text-sm italic text-gray-500 bg-gray-100">
-              {typingUsers.join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
-            </div>
-          )}
-          <form onSubmit={sendMessage} className="flex p-4 bg-white border-t border-gray-200">
-            <input
-              type="text"
-              value={message}
-              onChange={handleTyping}
-              onBlur={() => socket?.emit('typing', false)}
-              placeholder="Type a message..."
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 text-white bg-green-500 rounded-r-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
-            >
-              Send
-            </button>
-          </form>
-        </div>
+    <div className="chat-container">
+      <div className="chat-header">
+        <h2>Room: {room}</h2>
+        <Users users={users} currentUser={username} />
       </div>
+      
+      <div className="messages-container">
+        {messages.map((msg, index) => (
+          <Message 
+            key={index} 
+            message={msg} 
+            isCurrentUser={msg.username === username} 
+            isSystem={msg.isSystem}
+          />
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      
+      {typingUsers.length > 0 && (
+        <div className="typing-indicator">
+          {typingUsers.join(', ')} {typingUsers.length > 1 ? 'are' : 'is'} typing...
+        </div>
+      )}
+      
+      {error && <div className="error-message">{error}</div>}
+      
+      <form className="message-form" onSubmit={handleSendMessage}>
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            handleTyping();
+          }}
+          placeholder="Type a message..."
+        />
+        <button type="submit" disabled={!message.trim()}>
+          <FiSend />
+        </button>
+      </form>
     </div>
   );
 };
