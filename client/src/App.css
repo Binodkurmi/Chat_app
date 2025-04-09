@@ -266,3 +266,8 @@ button:disabled {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary-dark);
 }
+.current-user {
+  font-weight: bold;
+  color: green;
+}
+
